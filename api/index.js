@@ -8,9 +8,15 @@ const imageDownloader = require('image-downloader');
 const multer = require('multer');
 const User = require('./models/User');
 const Place = require('./models/Place');
-const Booking= require('./models/Booking');
+const Booking = require('./models/Booking');
 const fs = require('fs');
+const Razorpay = require('razorpay');
+const { response } = require('express');
 
+const razorpay = new Razorpay({
+  key_id: 'rzp_test_Yr7KaDTuV3HKdl',
+  key_secret: 'JJMi0cRmWJIUOVs32eS7LTlE'
+})
 require('dotenv').config();
 const app = express();
 
@@ -114,14 +120,14 @@ app.post('/upload', photosMiddleware.array('photos', 100), async (req, res) => {
   const uploadedFiles = [];
   for (let i = 0; i < req.files.length; i++) {
     const { path, originalname } = req.files[i];
-    const parts=originalname.split('.')
-    const ext=parts[parts.length-1]
-    const newPath=path+'.'+ext;
-    fs.renameSync(path,newPath)
+    const parts = originalname.split('.')
+    const ext = parts[parts.length - 1]
+    const newPath = path + '.' + ext;
+    fs.renameSync(path, newPath)
     // const url = await uploadToS3(path, originalname, mimetype);
     uploadedFiles.push(newPath);
   }
-  
+
   res.json(uploadedFiles);
 });
 
@@ -185,22 +191,50 @@ app.get('/places', async (req, res) => {
 app.post('/bookings', async (req, res) => {
   const userData = await getUserDataFromReq(req);
   const {
-    place,checkIn,checkOut,numberOfGuests,name,phone,price,
+    place, checkIn, checkOut, numberOfGuests, name, phone, price,
   } = req.body;
-  Booking.create({
-    place,checkIn,checkOut,numberOfGuests,name,phone,price,
-    user:userData.id,
-  }).then((doc) => {
-    res.json(doc);
-  }).catch((err) => {
-    throw err;
-  });
+  const amount = price
+  const currency = 'INR'
+
+  const options = {
+    amount: amount * 100,
+    currency
+  }
+  let razorResponse;
+
+  try {
+    razorResponse = await razorpay.orders.create(options)
+    console.log(response)
+    // res.json({
+    // 	id: response.id,
+    // 	currency: response.currency,
+    // 	amount: response.amount
+    // })
+  } catch (error) {
+    console.log(error)
+  }
+  if (razorResponse) {
+    Booking.create({
+      place, checkIn, checkOut, numberOfGuests, name, phone, price,
+      user: userData.id, razorID: razorResponse.id
+    }).then((doc) => {
+      res.json(doc);
+    }).catch((err) => {
+      throw err;
+    });
+  }
+  else {
+
+  }
+
 });
 
 
 
-app.get('/bookings', async (req,res) => {
+app.get('/bookings', async (req, res) => {
   const userData = await getUserDataFromReq(req);
-  res.json( await Booking.find({user:userData.id}).populate('place') );
+  res.json(await Booking.find({ user: userData.id }).populate('place'));
 });
+
+
 app.listen(5000);

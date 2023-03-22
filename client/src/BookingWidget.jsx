@@ -1,17 +1,17 @@
-import {useContext, useEffect, useState} from "react";
-import {differenceInCalendarDays} from "date-fns";
+import { useContext, useEffect, useState } from "react";
+import { differenceInCalendarDays } from "date-fns";
 import axios from "axios";
-import {Navigate} from "react-router-dom";
-import {UserContext} from "./UserContext.jsx";
+import { Navigate } from "react-router-dom";
+import { UserContext } from "./UserContext.jsx";
 
-export default function BookingWidget({place}) {
-  const [checkIn,setCheckIn] = useState('');
-  const [checkOut,setCheckOut] = useState('');
-  const [numberOfGuests,setNumberOfGuests] = useState(1);
-  const [name,setName] = useState('');
-  const [phone,setPhone] = useState('');
-  const [redirect,setRedirect] = useState('');
-  const {user} = useContext(UserContext);
+export default function BookingWidget({ place }) {
+  const [checkIn, setCheckIn] = useState('');
+  const [checkOut, setCheckOut] = useState('');
+  const [numberOfGuests, setNumberOfGuests] = useState(1);
+  const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [redirect, setRedirect] = useState('');
+  const { user } = useContext(UserContext);
 
   useEffect(() => {
     if (user) {
@@ -24,13 +24,67 @@ export default function BookingWidget({place}) {
     numberOfNights = differenceInCalendarDays(new Date(checkOut), new Date(checkIn));
   }
 
+  //razorpay
+  function loadScript(src) {
+    return new Promise((resolve) => {
+      const script = document.createElement("script");
+      script.src = src;
+      script.onload = () => {
+        resolve(true);
+      };
+      script.onerror = () => {
+        resolve(false);
+      };
+      document.body.appendChild(script);
+    });
+  }
+
   async function bookThisPlace() {
+    const res = await loadScript(
+      "https://checkout.razorpay.com/v1/checkout.js"
+    );
+
+    if (!res) {
+      alert("Razorpay SDK failed to load. Are you online?");
+      return;
+    }
     const response = await axios.post('/bookings', {
-      checkIn,checkOut,numberOfGuests,name,phone,
-      place:place._id,
-      price:numberOfNights * place.price,
+      checkIn, checkOut, numberOfGuests, name, phone,
+      place: place._id,
+      price: numberOfNights * place.price,
     });
     const bookingId = response.data._id;
+    // const data = await fetch(
+    //   "http://localhost:5000/api/calendar/razorpay",
+    //   {
+    //     method: "POST",
+    //   }
+    // ).then((t) => t.json());
+
+    // console.log(data);
+
+    const options = {
+      key: "rzp_test_Yr7KaDTuV3HKdl",
+      currency: "INR",
+      amount: response.data.price * 100,
+      order_id: response.data.razorID,
+      name: "QuickDeal",
+      description: "Pay the following amount to book doctor",
+      image:
+        "https://d6xcmfyh68wv8.cloudfront.net/assets/razorpay-glyph.svg",
+      handler: function (response) {
+        alert(
+          "Payment Success!! Booking Has been Sent to the Hotel Succesfully"
+        );
+
+        // alert(response.razorpay_payment_id);
+        // alert(response.razorpay_order_id);
+        // alert(response.razorpay_signature);
+      },
+    };
+    const paymentObject = new window.Razorpay(options);
+    paymentObject.open();
+
     setRedirect(`/account/bookings/${bookingId}`);
   }
 
@@ -48,31 +102,31 @@ export default function BookingWidget({place}) {
           <div className="py-3 px-4">
             <label>Check in:</label>
             <input type="date"
-                   value={checkIn}
-                   onChange={ev => setCheckIn(ev.target.value)}/>
+              value={checkIn}
+              onChange={ev => setCheckIn(ev.target.value)} />
           </div>
           <div className="py-3 px-4 border-l">
             <label>Check out:</label>
             <input type="date" value={checkOut}
-                   onChange={ev => setCheckOut(ev.target.value)}/>
+              onChange={ev => setCheckOut(ev.target.value)} />
           </div>
         </div>
         <div className="py-3 px-4 border-t">
           <label>Number of guests:</label>
           <input type="number"
-                 value={numberOfGuests}
-                 onChange={ev => setNumberOfGuests(ev.target.value)}/>
+            value={numberOfGuests}
+            onChange={ev => setNumberOfGuests(ev.target.value)} />
         </div>
         {numberOfNights > 0 && (
           <div className="py-3 px-4 border-t">
             <label>Your full name:</label>
             <input type="text"
-                   value={name}
-                   onChange={ev => setName(ev.target.value)}/>
+              value={name}
+              onChange={ev => setName(ev.target.value)} />
             <label>Phone number:</label>
             <input type="tel"
-                   value={phone}
-                   onChange={ev => setPhone(ev.target.value)}/>
+              value={phone}
+              onChange={ev => setPhone(ev.target.value)} />
           </div>
         )}
       </div>
